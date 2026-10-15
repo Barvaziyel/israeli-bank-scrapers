@@ -31,6 +31,7 @@ Currently only the following banks are supported:
 - Beyhad Bishvilha - [ביחד בשבילך](https://www.hist.org.il/) (thanks [@esakal](https://github.com/esakal))
 - OneZero (Experimental) (thanks [@orzarchi](https://github.com/orzarchi))
 - Behatsdaa - [בהצדעה](behatsdaa.org.il) (thanks [@daniel-hauser](https://github.com/daniel-hauser))
+- Bank of Jerusalem
 
 # Prerequisites
 To use this you will need to have [Node.js](https://nodejs.org) >= 22.22.2 installed.
@@ -396,6 +397,19 @@ const credentials = {
 };
 ```
 This scraper supports fetching transaction from up to six months.
+
+## Bank of Jerusalem
+This scraper expects the following credentials object:
+```node
+const credentials = {
+  username: <user name>,
+  password: <user password>,
+  otpCodeRetriever: async () => <the code the bank sends by SMS> // optional
+};
+```
+The bank sometimes asks for a code sent by SMS after the password. Without `otpCodeRetriever`, the scrape then fails with `TWO_FACTOR_RETRIEVER_MISSING`.
+
+It returns the current account (its balance, and the transactions its page lists from `startDate` on) and each deposit as a separate savings account, with its revalued balance and no transactions.
 
 ## Beyhad Bishvilha
 This scraper expects the following credentials object::
