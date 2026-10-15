@@ -4,6 +4,7 @@ import { exportTransactions, extendAsyncTimeout, getTestsConfig, maybeTestCompan
 import BankJerusalemScraper, {
   convertDepositCards,
   convertTransactions,
+  newestBalance,
   parseAccountNumber,
   parseAmount,
   parseDate,
@@ -59,6 +60,21 @@ describe('Bank of Jerusalem parsing', () => {
     expect(convertTransactions({ headers: ['א', 'ב'], rows: [['01/09/2026', '1.00']] }, moment('2026-01-01'))).toEqual(
       [],
     );
+  });
+
+  test('takes the balance after the newest transaction, the last row on its day', () => {
+    const table = {
+      headers: ['תאריך', 'תיאור', 'סכום', 'יתרה'],
+      rows: [
+        ['30/09/2026', 'א', '-10.00', '1,000.00'],
+        ['05/10/2026', 'ב', '-20.00', '980.00'],
+        ['05/10/2026', 'ג', '-30.00', '950.00'],
+        ['01/10/2026', 'ד', '5.00', '1,005.00'],
+      ],
+    };
+
+    expect(newestBalance(table)).toBe(950);
+    expect(newestBalance({ headers: ['תאריך', 'סכום'], rows: [['05/10/2026', '1.00']] })).toBeNull();
   });
 
   test('reads the account number from the line under the page title', () => {

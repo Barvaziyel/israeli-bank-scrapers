@@ -139,6 +139,17 @@ export function convertTransactions(
     });
 }
 
+// The balance after the newest transaction. The page lists them oldest first, so on a day with
+// several, the last row is the newest.
+export function newestBalance(table: ScrapedTable): number | null {
+  const withBalance = transactionsFromTable(table).filter(txn => txn.balance !== null);
+  const newest = withBalance.reduce<ScrapedTransaction | null>(
+    (latest, txn) => (!latest || !txn.date.isBefore(latest.date, 'day') ? txn : latest),
+    null,
+  );
+  return newest?.balance ?? null;
+}
+
 // "… 012-345678901 | ₪ | …" under the account page's title.
 export function parseAccountNumber(line: string): string | null {
   return /\d+-\d{4,}/.exec(clean(line))?.[0] ?? null;
@@ -257,7 +268,9 @@ class BankJerusalemScraper extends BaseScraperWithBrowser<ScraperSpecificCredent
     const startMoment = moment.max(defaultStartMoment, moment(this.options.startDate || defaultStartMoment.toDate()));
 
     // The home page, where the login ends, shows the current account's balance.
-    const balance = parseAmount(
+    // It shows up after the page has loaded.
+    await waitUntilElementFound(this.page, HOME_BALANCE_SELECTOR, true, 15000).catch(() => {});
+    const homeBalance = parseAmount(
       await pageEval(this.page, HOME_BALANCE_SELECTOR, '', el => (el as HTMLElement).innerText),
     );
 
@@ -280,6 +293,7 @@ class BankJerusalemScraper extends BaseScraperWithBrowser<ScraperSpecificCredent
       };
     });
     const txns = convertTransactions(table, startMoment, this.options);
+    const balance = homeBalance ?? newestBalance(table);
     const titleLines = await pageEvalAll(this.page, ACCOUNT_LINE_SELECTOR, [], spans =>
       spans.map(span => span.textContent ?? ''),
     );
