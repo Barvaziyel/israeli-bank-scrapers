@@ -210,8 +210,22 @@ async function searchByDates(page: Page, startMoment: Moment) {
   await dropdownSelect(page, PERIOD_SELECTOR, PERIOD_DATE_RANGE);
   await fillInput(page, FROM_DATE_SELECTOR, startMoment.format(SEARCH_DATE_FORMAT));
   await page.$eval(FROM_DATE_SELECTOR, input => (input as HTMLElement).blur());
+  // The rows of the last 30 days are marked, to tell when the date range's rows replace them.
+  await page.$$eval(`${TXN_TABLE_SELECTOR} tr`, rows => rows.forEach(row => row.setAttribute('data-ibs-old', '')));
   await clickButton(page, CONTINUE_SELECTOR);
-  await page.waitForNetworkIdle({ idleTime: 1000, timeout: 30000 });
+  await waitUntil(
+    () =>
+      page
+        .$$eval(
+          `${TXN_TABLE_SELECTOR} tr`,
+          rows => rows.length > 0 && rows.every(row => !row.hasAttribute('data-ibs-old')),
+        )
+        // The page can be in the middle of loading, which makes the check throw.
+        .catch(() => false),
+    'transactions for the date range',
+    30000,
+    500,
+  );
 }
 
 // Waits until the login is done or the page says the password is wrong.
