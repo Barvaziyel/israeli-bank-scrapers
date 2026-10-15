@@ -1,7 +1,15 @@
 import moment, { type Moment } from 'moment';
 import { type Page } from 'puppeteer';
 import { SHEKEL_CURRENCY } from '../constants';
-import { elementPresentOnPage, pageEval, pageEvalAll, waitUntilElementFound } from '../helpers/elements-interactions';
+import {
+  clickButton,
+  dropdownSelect,
+  elementPresentOnPage,
+  fillInput,
+  pageEval,
+  pageEvalAll,
+  waitUntilElementFound,
+} from '../helpers/elements-interactions';
 import { getRawTransaction } from '../helpers/transactions';
 import { sleep, waitUntil } from '../helpers/waiting';
 import { TransactionStatuses, TransactionTypes, type Transaction, type TransactionsAccount } from '../transactions';
@@ -28,6 +36,11 @@ const LOGOUT_SELECTOR = 'input.logoutAndPersonalDetailsBtn, .LogoutAndPersonalDe
 const HOME_BALANCE_SELECTOR = '#HPCurrentAccountZone .TotalRevaluedBalance';
 const TXN_TABLE_SELECTOR = 'table.CurrentAccountLastTransactions';
 const ACCOUNT_LINE_SELECTOR = '.LayoutWidePageTitles span';
+const PERIOD_SELECTOR = 'select#PeriodFilter';
+const PERIOD_DATE_RANGE = 'none'; // "בחירת טווח תאריכים"
+const FROM_DATE_SELECTOR = 'input#fromDate';
+const CONTINUE_SELECTOR = '.ContinueButton button';
+const SEARCH_DATE_FORMAT = 'DD.MM.YYYY';
 const DEPOSIT_CARD_SELECTOR = '.depositsAndLoans.Deposits .depositsEntry';
 
 const DATE_FORMATS = ['DD/MM/YYYY', 'DD/MM/YY', 'DD.MM.YYYY', 'DD.MM.YY'];
@@ -192,6 +205,15 @@ function getPossibleLoginResults(page: Page): PossibleLoginResults {
   };
 }
 
+// The account page shows the last 30 days: picks a date range from startMoment to today.
+async function searchByDates(page: Page, startMoment: Moment) {
+  await dropdownSelect(page, PERIOD_SELECTOR, PERIOD_DATE_RANGE);
+  await fillInput(page, FROM_DATE_SELECTOR, startMoment.format(SEARCH_DATE_FORMAT));
+  await page.$eval(FROM_DATE_SELECTOR, input => (input as HTMLElement).blur());
+  await clickButton(page, CONTINUE_SELECTOR);
+  await page.waitForNetworkIdle({ idleTime: 1000, timeout: 30000 });
+}
+
 // Waits until the login is done or the page says the password is wrong.
 async function waitForLoginResult(page: Page) {
   await waitUntil(
@@ -276,6 +298,7 @@ class BankJerusalemScraper extends BaseScraperWithBrowser<ScraperSpecificCredent
 
     await this.navigateTo(ACCOUNT_URL);
     await waitUntilElementFound(this.page, TXN_TABLE_SELECTOR, true, 30000);
+    await searchByDates(this.page, startMoment);
     const table = await pageEval(this.page, TXN_TABLE_SELECTOR, { headers: [], rows: [] }, el => {
       const text = (cell: Element) => (cell as HTMLElement).innerText.replace(/\s+/g, ' ').trim();
       // An amount the site marks as negative (by its class, or a minus in its aria-label, "סכום - -12.34")
