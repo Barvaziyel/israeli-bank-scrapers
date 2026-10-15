@@ -29,8 +29,8 @@ const SUBMIT_TEXTS = ['כניסה', 'כניסה לחשבון', 'התחברות',
 const USERNAME_SELECTOR = '[data-ibs-login="username"]';
 const PASSWORD_SELECTOR = '[data-ibs-login="password"]';
 const SUBMIT_SELECTOR = '[data-ibs-login="submit"]';
-const INVALID_PASSWORD_TEXT =
-  /שם משתמש או סיסמה (?:שגויים|אינם נכונים)|פרטי ההזדהות (?:שגויים|אינם נכונים)|הסיסמה שגויה/;
+// "אחד או יותר מפרטי הזהות שהזנת שגוי. אנא הזן את הפרטים שנית."
+const INVALID_PASSWORD_TEXT = /אחד או יותר מפרטי הזהות שהזנת שגוי/;
 
 const LOGOUT_SELECTOR = 'input.logoutAndPersonalDetailsBtn, .LogoutAndPersonalDetails a.logout';
 const HOME_BALANCE_SELECTOR = '#HPCurrentAccountZone .TotalRevaluedBalance';
