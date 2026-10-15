@@ -2,15 +2,11 @@ import moment, { type Moment } from 'moment';
 import { type Page } from 'puppeteer';
 import { SHEKEL_CURRENCY } from '../constants';
 import { elementPresentOnPage, pageEval, pageEvalAll, waitUntilElementFound } from '../helpers/elements-interactions';
-import { getDebug } from '../helpers/debug';
 import { getRawTransaction } from '../helpers/transactions';
 import { sleep, waitUntil } from '../helpers/waiting';
 import { TransactionStatuses, TransactionTypes, type Transaction, type TransactionsAccount } from '../transactions';
 import { BaseScraperWithBrowser, LoginResults, type PossibleLoginResults } from './base-scraper-with-browser';
-import { ScraperErrorTypes } from './errors';
-import { type ScraperOptions, type ScraperScrapingResult } from './interface';
-
-const debug = getDebug('bank-jerusalem');
+import { type ScraperOptions } from './interface';
 
 const BASE_URL = 'https://services.bankjerusalem.co.il';
 const LOGIN_URL = `${BASE_URL}/Pages/Login.aspx`;
@@ -25,10 +21,8 @@ const SUBMIT_TEXTS = ['כניסה', 'כניסה לחשבון', 'התחברות',
 const USERNAME_SELECTOR = '[data-ibs-login="username"]';
 const PASSWORD_SELECTOR = '[data-ibs-login="password"]';
 const SUBMIT_SELECTOR = '[data-ibs-login="submit"]';
-const OTP_SELECTOR = 'input[autocomplete="one-time-code"]';
 const INVALID_PASSWORD_TEXT =
   /שם משתמש או סיסמה (?:שגויים|אינם נכונים)|פרטי ההזדהות (?:שגויים|אינם נכונים)|הסיסמה שגויה/;
-const BLOCKED_TEXT = /המשתמש (?:נחסם|חסום)|נחסמה הגישה/;
 
 const LOGOUT_SELECTOR = 'input.logoutAndPersonalDetailsBtn, .LogoutAndPersonalDetails a.logout';
 const HOME_BALANCE_SELECTOR = '#HPCurrentAccountZone .TotalRevaluedBalance';
@@ -42,8 +36,6 @@ const LOGIN_RESULT_TIMEOUT = 60000;
 type ScraperSpecificCredentials = {
   username: string;
   password: string;
-  // The bank sometimes asks for a code sent by SMS after the password.
-  otpCodeRetriever?: () => Promise<string>;
 };
 
 export interface ScrapedTable {
@@ -189,6 +181,16 @@ function getPossibleLoginResults(page: Page): PossibleLoginResults {
   };
 }
 
+// Waits until the login is done or the page says the password is wrong.
+async function waitForLoginResult(page: Page) {
+  await waitUntil(
+    async () => (await isLoggedIn(page)) || INVALID_PASSWORD_TEXT.test(await pageText(page)),
+    'login result',
+    LOGIN_RESULT_TIMEOUT,
+    1000,
+  );
+}
+
 // Picks the username and password tab if it isn't open, and marks the form's fields and its
 // submit button with data-ibs-login: the visible password input, the visible text input before
 // it, and the button that says one of SUBMIT_TEXTS (or the form's submit button).
@@ -236,8 +238,6 @@ async function markLoginForm(page: Page) {
 }
 
 class BankJerusalemScraper extends BaseScraperWithBrowser<ScraperSpecificCredentials> {
-  private otpRetrieverMissing = false;
-
   getLoginOptions(credentials: ScraperSpecificCredentials) {
     return {
       loginUrl: LOGIN_URL,
@@ -247,55 +247,9 @@ class BankJerusalemScraper extends BaseScraperWithBrowser<ScraperSpecificCredent
         { selector: PASSWORD_SELECTOR, value: credentials.password },
       ],
       submitButtonSelector: SUBMIT_SELECTOR,
-      postAction: async () => this.waitForLoginResult(credentials),
+      postAction: async () => waitForLoginResult(this.page),
       possibleResults: getPossibleLoginResults(this.page),
     };
-  }
-
-  async login(credentials: ScraperSpecificCredentials): Promise<ScraperScrapingResult> {
-    const result = await super.login(credentials);
-    if (this.otpRetrieverMissing) {
-      return {
-        success: false,
-        errorType: ScraperErrorTypes.TwoFactorRetrieverMissing,
-        errorMessage: 'The bank asked for a code sent by SMS, and no otpCodeRetriever was given',
-      };
-    }
-    // The base class has no handling for an AccountBlocked login result, so it's reported here.
-    if (!result.success && BLOCKED_TEXT.test(await pageText(this.page))) {
-      return {
-        success: false,
-        errorType: ScraperErrorTypes.AccountBlocked,
-        errorMessage: 'The bank says the user is blocked',
-      };
-    }
-    return result;
-  }
-
-  // Waits until the login is done, has failed, or asks for the SMS code, and enters the code.
-  private async waitForLoginResult(credentials: ScraperSpecificCredentials) {
-    const outcome = await waitUntil(
-      async () => {
-        if (await isLoggedIn(this.page)) return 'done';
-        if (await elementPresentOnPage(this.page, OTP_SELECTOR).catch(() => false)) return 'otp';
-        const text = await pageText(this.page);
-        return INVALID_PASSWORD_TEXT.test(text) || BLOCKED_TEXT.test(text) ? 'done' : null;
-      },
-      'login result',
-      LOGIN_RESULT_TIMEOUT,
-      1000,
-    );
-    if (outcome !== 'otp') return;
-
-    if (!credentials.otpCodeRetriever) {
-      this.otpRetrieverMissing = true;
-      return;
-    }
-    debug('the bank asked for an SMS code');
-    const code = await credentials.otpCodeRetriever();
-    await this.page.type(OTP_SELECTOR, code);
-    await this.page.keyboard.press('Enter');
-    await waitUntil(async () => isLoggedIn(this.page), 'login after the SMS code', LOGIN_RESULT_TIMEOUT, 1000);
   }
 
   async fetchData() {

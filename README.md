@@ -403,11 +403,9 @@ This scraper expects the following credentials object:
 ```node
 const credentials = {
   username: <user name>,
-  password: <user password>,
-  otpCodeRetriever: async () => <the code the bank sends by SMS> // optional
+  password: <user password>
 };
 ```
-The bank sometimes asks for a code sent by SMS after the password. Without `otpCodeRetriever`, the scrape then fails with `TWO_FACTOR_RETRIEVER_MISSING`.
 
 It returns the current account (its balance, and the transactions its page lists from `startDate` on) and each deposit as a separate savings account, with its revalued balance and no transactions.
 
