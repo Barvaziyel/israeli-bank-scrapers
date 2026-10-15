@@ -409,6 +409,16 @@ const credentials = {
 
 It returns the current account (its balance, and the transactions its page lists from `startDate` on) and each deposit as a separate savings account, with its revalued balance and no transactions.
 
+The bank's site is behind a bot check (Radware) that asks a new browser profile to solve a captcha before the login page. Run with `showBrowser: true` and solve it in the window. To be asked only once, keep the browser profile between runs by passing a folder of its own in `args`:
+```node
+const options = {
+  companyId: CompanyTypes.bankJerusalem,
+  startDate,
+  showBrowser: true,
+  args: ['--user-data-dir=/path/to/a/folder/for/this/scraper'],
+};
+```
+
 ## Beyhad Bishvilha
 This scraper expects the following credentials object::
 ```node
